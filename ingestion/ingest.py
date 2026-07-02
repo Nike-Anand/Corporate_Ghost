@@ -370,6 +370,16 @@ async def ingest_all():
         os.environ["LLM_API_KEY"] = gemini_key
         os.environ["GEMINI_API_KEY"] = gemini_key
         os.environ["EMBEDDING_PROVIDER"] = "fastembed"
+        os.environ["EMBEDDING_MODEL"] = "BAAI/bge-small-en-v1.5"
+        os.environ["EMBEDDING_DIMENSIONS"] = "384"
+        
+        # Apply programmatically to singleton settings
+        cognee.config.set_llm_provider("gemini")
+        cognee.config.set_llm_model("gemini/gemini-1.5-flash")
+        cognee.config.set_llm_api_key(gemini_key)
+        cognee.config.set_embedding_provider("fastembed")
+        cognee.config.set_embedding_model("BAAI/bge-small-en-v1.5")
+        cognee.config.set_embedding_dimensions(384)
         
     try:
         # Call cognee remember

@@ -35,6 +35,20 @@ from ingestion.ingest import update_health_stats
 
 async def scrub_memory():
     print("=== Scrubbing Corporate Ghost Memory Graph ===")
+    
+    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("LLM_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    has_openai = openai_key and openai_key != "your_actual_api_key_here"
+    has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
+
+    if has_gemini and not has_openai:
+        cognee.config.set_llm_provider("gemini")
+        cognee.config.set_llm_model("gemini/gemini-1.5-flash")
+        cognee.config.set_llm_api_key(gemini_key)
+        cognee.config.set_embedding_provider("fastembed")
+        cognee.config.set_embedding_model("BAAI/bge-small-en-v1.5")
+        cognee.config.set_embedding_dimensions(384)
+
     try:
         # Calls cognee.forget to clear the memory layer
         await cognee.forget(everything=True)
