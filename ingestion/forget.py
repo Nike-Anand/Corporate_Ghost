@@ -23,6 +23,8 @@ if has_gemini and not has_openai:
     os.environ["LLM_API_KEY"] = gemini_key
     os.environ["GEMINI_API_KEY"] = gemini_key
     os.environ["EMBEDDING_PROVIDER"] = "fastembed"
+    os.environ["EMBEDDING_MODEL"] = "BAAI/bge-small-en-v1.5"
+    os.environ["EMBEDDING_DIMENSIONS"] = "384"
 
 # Enable filesystem cache
 os.environ["CACHING"] = "true"
