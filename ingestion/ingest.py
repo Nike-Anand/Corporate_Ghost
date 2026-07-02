@@ -261,6 +261,20 @@ async def fetch_live_jira(token, domain, email):
     return items
 
 async def ingest_all():
+    # Pre-configure LLM and Embedding settings if running on Gemini
+    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("LLM_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    has_openai = openai_key and openai_key != "your_actual_api_key_here"
+    has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
+
+    if has_gemini and not has_openai:
+        cognee.config.set_llm_provider("gemini")
+        cognee.config.set_llm_model("gemini/gemini-1.5-flash")
+        cognee.config.set_llm_api_key(gemini_key)
+        cognee.config.set_embedding_provider("fastembed")
+        cognee.config.set_embedding_model("BAAI/bge-small-en-v1.5")
+        cognee.config.set_embedding_dimensions(384)
+
     print("Initializing Cognee database tables...")
     await create_db_and_tables()
 
@@ -361,25 +375,6 @@ async def ingest_all():
         update_health_stats(len(data_items), action="ingest")
         print("Mock Ingestion Complete.")
         return
-        
-    # Configure Gemini environment variables if running with Gemini
-    if has_gemini and not has_openai:
-        print("[INFO] Valid Gemini API key detected. Configuring Cognee to use Google Gemini LLM provider...")
-        os.environ["LLM_PROVIDER"] = "gemini"
-        os.environ["LLM_MODEL"] = "gemini/gemini-1.5-flash"
-        os.environ["LLM_API_KEY"] = gemini_key
-        os.environ["GEMINI_API_KEY"] = gemini_key
-        os.environ["EMBEDDING_PROVIDER"] = "fastembed"
-        os.environ["EMBEDDING_MODEL"] = "BAAI/bge-small-en-v1.5"
-        os.environ["EMBEDDING_DIMENSIONS"] = "384"
-        
-        # Apply programmatically to singleton settings
-        cognee.config.set_llm_provider("gemini")
-        cognee.config.set_llm_model("gemini/gemini-1.5-flash")
-        cognee.config.set_llm_api_key(gemini_key)
-        cognee.config.set_embedding_provider("fastembed")
-        cognee.config.set_embedding_model("BAAI/bge-small-en-v1.5")
-        cognee.config.set_embedding_dimensions(384)
         
     try:
         # Call cognee remember
