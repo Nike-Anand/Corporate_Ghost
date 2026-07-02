@@ -5,6 +5,25 @@ import sys
 # Add root folder to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
+
+# Load root .env file explicitly
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
+
+# Pre-configure LLM_PROVIDER and related settings in os.environ prior to importing cognee
+gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("LLM_API_KEY")
+openai_key = os.environ.get("OPENAI_API_KEY")
+has_openai = openai_key and openai_key != "your_actual_api_key_here"
+has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
+
+if has_gemini and not has_openai:
+    os.environ["LLM_PROVIDER"] = "gemini"
+    os.environ["LLM_MODEL"] = "gemini/gemini-1.5-flash"
+    os.environ["LLM_API_KEY"] = gemini_key
+    os.environ["GEMINI_API_KEY"] = gemini_key
+    os.environ["EMBEDDING_PROVIDER"] = "fastembed"
+
 # Enable filesystem cache
 os.environ["CACHING"] = "true"
 os.environ["CACHE_BACKEND"] = "fs"
