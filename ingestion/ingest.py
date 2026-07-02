@@ -13,17 +13,32 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(ROOT_DIR, ".env"))
 
+def get_env_var(name):
+    val = os.environ.get(name)
+    if val is not None:
+        return val.strip()
+    val = os.environ.get(name.upper()) or os.environ.get(name.lower())
+    if val is not None:
+        return val.strip()
+    target_key = name.strip().upper()
+    for k, v in os.environ.items():
+        if k.strip().upper() == target_key:
+            return v.strip()
+    return None
+
 # Pre-configure LLM_PROVIDER and related settings in os.environ prior to importing cognee
-gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("LLM_API_KEY")
-openai_key = os.environ.get("OPENAI_API_KEY")
-has_openai = openai_key and openai_key != "your_actual_api_key_here"
+gemini_key = get_env_var("GEMINI_API_KEY") or get_env_var("LLM_API_KEY")
+openai_key = get_env_var("OPENAI_API_KEY")
+llm_provider = get_env_var("LLM_PROVIDER")
+
+has_openai = openai_key and openai_key.startswith("sk-")
 has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
 
-if has_gemini and not has_openai:
+if llm_provider == "gemini" or (has_gemini and not has_openai):
     os.environ["LLM_PROVIDER"] = "gemini"
     os.environ["LLM_MODEL"] = "gemini/gemini-1.5-flash"
-    os.environ["LLM_API_KEY"] = gemini_key
-    os.environ["GEMINI_API_KEY"] = gemini_key
+    os.environ["LLM_API_KEY"] = gemini_key or ""
+    os.environ["GEMINI_API_KEY"] = gemini_key or ""
     os.environ["EMBEDDING_PROVIDER"] = "fastembed"
     os.environ["EMBEDDING_MODEL"] = "BAAI/bge-small-en-v1.5"
     os.environ["EMBEDDING_DIMENSIONS"] = "384"
@@ -262,15 +277,18 @@ async def fetch_live_jira(token, domain, email):
 
 async def ingest_all():
     # Pre-configure LLM and Embedding settings if running on Gemini
-    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("LLM_API_KEY")
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    has_openai = openai_key and openai_key != "your_actual_api_key_here"
+    gemini_key = get_env_var("GEMINI_API_KEY") or get_env_var("LLM_API_KEY")
+    openai_key = get_env_var("OPENAI_API_KEY")
+    llm_provider = get_env_var("LLM_PROVIDER")
+
+    has_openai = openai_key and openai_key.startswith("sk-")
     has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
 
-    if has_gemini and not has_openai:
+    if llm_provider == "gemini" or (has_gemini and not has_openai):
         cognee.config.set_llm_provider("gemini")
         cognee.config.set_llm_model("gemini/gemini-1.5-flash")
-        cognee.config.set_llm_api_key(gemini_key)
+        if gemini_key:
+            cognee.config.set_llm_api_key(gemini_key)
         cognee.config.set_embedding_provider("fastembed")
         cognee.config.set_embedding_model("BAAI/bge-small-en-v1.5")
         cognee.config.set_embedding_dimensions(384)
@@ -283,12 +301,12 @@ async def ingest_all():
     await cognee.forget(everything=True)
     
     # Load Environment keys
-    github_token = os.environ.get("GITHUB_TOKEN")
-    github_repo = os.environ.get("GITHUB_REPO")
-    slack_token = os.environ.get("Bot_User_OAuth_Token")
-    jira_token = os.environ.get("JIRA_TOKEN")
-    jira_domain = os.environ.get("JIRA_DOMAIN") or "nikeanand.atlassian.net"  # Default fallback
-    jira_email = os.environ.get("JIRA_EMAIL") or "nikeanand@gmail.com"  # Default fallback
+    github_token = get_env_var("GITHUB_TOKEN")
+    github_repo = get_env_var("GITHUB_REPO")
+    slack_token = get_env_var("Bot_User_OAuth_Token")
+    jira_token = get_env_var("JIRA_TOKEN")
+    jira_domain = get_env_var("JIRA_DOMAIN") or "nikeanand.atlassian.net"  # Default fallback
+    jira_email = get_env_var("JIRA_EMAIL") or "nikeanand@gmail.com"  # Default fallback
     
     data_items = []
     
@@ -364,10 +382,10 @@ async def ingest_all():
     print(f"Ingesting {len(data_items)} items into Cognee memory layer...")
     
     # Check if we have API Keys to run live memory ingestion
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("LLM_API_KEY")
+    openai_key = get_env_var("OPENAI_API_KEY")
+    gemini_key = get_env_var("GEMINI_API_KEY") or get_env_var("LLM_API_KEY")
     
-    has_openai = openai_key and openai_key != "your_actual_api_key_here"
+    has_openai = openai_key and openai_key.startswith("sk-")
     has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
     
     if not (has_openai or has_gemini):
