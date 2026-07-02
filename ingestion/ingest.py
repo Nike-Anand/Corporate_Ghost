@@ -233,7 +233,7 @@ async def fetch_live_jira(token, domain, email):
     jql = "project IS NOT EMPTY ORDER BY updated DESC"
     async with httpx.AsyncClient() as client:
         try:
-            url = f"https://{domain}/rest/api/3/search?jql={jql}&maxResults=10"
+            url = f"https://{domain}/rest/api/3/search/jql?jql={jql}&maxResults=10"
             res = await client.get(url, headers=headers, timeout=10.0)
             if res.status_code == 200:
                 issues = res.json().get("issues", [])
