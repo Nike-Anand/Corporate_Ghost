@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CACHING=true
+      - CACHE_BACKEND=fs
+    volumes:
+      - ./.cognee_cache:/app/.cognee_cache
+      - ./.cognee_db:/app/.cognee_db
+      - ./api:/app/api
+      - ./ingestion:/app/ingestion
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    depends_on:
+      - api

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "slack-thread-101",
+    "channel": "#production-alerts",
+    "author": "Alice (Senior SRE)",
+    "date": "2023-04-12",
+    "content": "Alice: We are seeing a spike in failed capture requests on our Stripe API v1 client. Error code: rate_limit_exceeded and invalid_charge_state. Is anyone else seeing this?\nBob: Yeah, I checked the logs. It seems Stripe v1 is failing to handle international transaction retries properly. We might need to upgrade our integration.\nAlice: Also, our security audit highlighted that Stripe v1 doesn't comply with the latest PCI-DSS requirements. We need to create a Jira ticket to plan deprecation.",
+    "link": "https://company.slack.com/archives/C12345/p1681283600"
+  },
+  {
+    "id": "slack-thread-202",
+    "channel": "#payment-migration",
+    "author": "Bob (Lead Architect)",
+    "date": "2024-01-15",
+    "content": "Dave: Hey, I am seeing some webhooks failing on the new Adyen integration. Is this a configuration issue?\nBob: Ah, yes. The Adyen webhook signature verification was using the old Stripe client's public key instead of the Adyen secret. I just pushed a fix in commit a8f9c2d. It should be working now.\nDave: Awesome, confirmed. Stripe v1 has been completely turned off in production today. Bye-bye old code!",
+    "link": "https://company.slack.com/archives/C67890/p1705312000"
+  }
+]
