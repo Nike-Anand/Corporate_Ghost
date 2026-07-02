@@ -121,12 +121,28 @@ async def ingest_all():
         
     print(f"Ingesting {len(data_items)} items into Cognee memory layer...")
     
-    # Check if we have OpenAI Key to run live memory ingestion
-    if not os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY") == "your_actual_api_key_here":
-        print("[WARNING] OPENAI_API_KEY not set. Running in MOCK ingestion mode. Health state updated.")
+    # Check if we have API Keys to run live memory ingestion
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("LLM_API_KEY")
+    
+    has_openai = openai_key and openai_key != "your_actual_api_key_here"
+    has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
+    
+    if not (has_openai or has_gemini):
+        print("[WARNING] No valid LLM API key (OPENAI_API_KEY or GEMINI_API_KEY) found. Running in MOCK ingestion mode. Health state updated.")
         update_health_stats(len(data_items), action="ingest")
         print("Mock Ingestion Complete.")
         return
+        
+    # Configure Gemini environment variables if running with Gemini
+    if has_gemini and not has_openai:
+        print("[INFO] Valid Gemini API key detected. Configuring Cognee to use Google Gemini LLM provider...")
+        os.environ["LLM_PROVIDER"] = "gemini"
+        os.environ["LLM_MODEL"] = "gemini/gemini-1.5-flash"
+        os.environ["LLM_API_KEY"] = gemini_key
+        os.environ["GEMINI_API_KEY"] = gemini_key
+        # Use local Fastembed to avoid needing another billing account/key for embeddings
+        os.environ["EMBEDDING_PROVIDER"] = "fastembed"
         
     try:
         # Call cognee remember
