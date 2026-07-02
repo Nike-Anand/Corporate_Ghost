@@ -1,29 +1,11 @@
 [
   {
-    "id": "PR-1145",
+    "id": "PR-442",
     "type": "Pull Request",
-    "title": "feat: Add Adyen integration and deprecate Stripe v1 client",
-    "author": "Charlie (Backend Engineer)",
-    "date": "2023-10-15",
-    "content": "This PR integrates the Adyen SDK for transaction handling and marks the legacy StripeClient class as @deprecated. Feature flags control traffic distribution between Stripe and Adyen.\nMerged by: Bob (Lead Architect)",
-    "link": "https://github.com/company/repo/pull/1145"
-  },
-  {
-    "id": "commit-a8f9c2d",
-    "type": "Commit",
-    "title": "fix: resolve Adyen webhook signature verification",
-    "author": "Bob (Lead Architect)",
+    "title": "PR #442: attempted retry-logic patch, merged but did not resolve root cause",
+    "author": "devansh",
     "date": "2024-01-15",
-    "content": "Fixes Adyen webhook verification by referencing the correct webhook signing token instead of the old Stripe credentials. Resolves production alert.",
-    "link": "https://github.com/company/repo/commit/a8f9c2d"
-  },
-  {
-    "id": "PR-1290",
-    "type": "Pull Request",
-    "title": "cleanup: Remove Stripe v1 codebase and database tables",
-    "author": "Charlie (Backend Engineer)",
-    "date": "2024-02-28",
-    "content": "This PR deletes all files under `/services/payments/stripe_v1`, drops the stripe_tokens database tables, and removes feature flag gates as migration to Adyen is 100% complete.",
-    "link": "https://github.com/company/repo/pull/1290"
+    "content": "Attempted retry-logic patch to solve PAY-118. Merged but did not resolve root cause of gateway connection pool capacity limits.",
+    "link": "https://github.com/org/repo/pull/442"
   }
 ]
