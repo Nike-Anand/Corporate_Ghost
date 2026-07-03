@@ -1,11 +1,11 @@
 [
   {
-    "id": "JIRA-402",
-    "title": "Deprecate Stripe v1 & Migrate to Adyen Gateway",
+    "id": "PAY-118",
+    "title": "intermittent timeouts on checkout",
     "status": "Closed",
-    "assignee": "Charlie (Backend Engineer)",
-    "date": "2023-05-02",
-    "content": "Description:\nStripe v1 SDK is deprecated by the vendor and has been flagged for deprecation. We are replacing it with Adyen to support robust multi-currency transactions and satisfy PCI compliance requirements.\n\nDecision log:\n- Decided to implement Adyen gateway wrapper.\n- Deprecate old StripeClient wrapper and throw warnings.\n- Target complete removal by Q1 2024.\n\nComments:\nCharlie: Initial draft PR is ready. The gateway selection is flag-controlled.",
-    "link": "https://company.atlassian.net/browse/JIRA-402"
+    "assignee": "priya.k",
+    "date": "2023-11-02",
+    "content": "Description:\nUsers are seeing intermittent timeouts at checkout. Investigation shows legacy gateway backend latency spike.\n\nDecision log:\n- Attempt patch for connection pooling/retry limit in PR #442.\n- Migration to StripeConnect (PAY-201) planned as replacement.",
+    "link": "https://jira.internal/PAY-118"
   }
 ]
