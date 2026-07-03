@@ -35,9 +35,9 @@ const MOCK = {
       details: "Deletes StripeClient.py, removes config keys, scrubs legacy database tables. JIRA-402 closed as Done.",
       link: "#", relation: "deletes", improved: false },
   ],
-  decisions: [
-    { title: "Stripe → Adyen migration", outcome: "Improved reliability and PCI-DSS compliance." },
-    { title: "Webhook signing hotfix", outcome: "Corrected credential mismatch after switchover." },
+  relatedDecisions: [
+    { title: "Stripe → Adyen migration", context: "Stripe v1 API was rate-limiting international retries and failing security audits.", outcome: "Improved reliability and PCI-DSS compliance." },
+    { title: "Webhook signing hotfix", context: "Adyen webhook verification was using Stripe signing credentials after switchover.", outcome: "Corrected credential mismatch after switchover." },
   ],
 };
 
@@ -79,6 +79,11 @@ export default function App() {
 
   // New Features State
   const [showIntegrations, setShowIntegrations] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [liveEvents, setLiveEvents] = useState([
+    { id: 1, type: "slack", text: "Indexing thread in #engineering-backend", time: new Date(Date.now() - 60000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) },
+    { id: 2, type: "jira", text: "Parsing JIRA-824 epic", time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
+  ]);
   const [integrations, setIntegrations] = useState({ slack: true, jira: true, github: true, notion: false });
   const [syncing, setSyncing] = useState(null);
   const [filterSrc, setFilterSrc] = useState({ slack: true, jira: true, github: true });
@@ -143,6 +148,26 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (appView !== "app") return;
+    const MOCK_EVENTS = [
+      { type: "slack", text: "Indexing thread in #engineering" },
+      { type: "jira", text: "Parsing JIRA-824 epic" },
+      { type: "github", text: "Ingesting commit d3f9a1" },
+      { type: "slack", text: "Mapping user 'Alice' to nodes" },
+      { type: "github", text: "Extracting diff for PR #1145" }
+    ];
+    const id = setInterval(() => {
+      setLiveEvents(prev => {
+        const nextEvent = MOCK_EVENTS[Math.floor(Math.random() * MOCK_EVENTS.length)];
+        const next = [...prev, { id: Date.now(), ...nextEvent, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }];
+        if (next.length > 5) next.shift();
+        return next;
+      });
+    }, 4500);
+    return () => clearInterval(id);
+  }, [appView]);
+
   /* ── mouse parallax tracking ── */
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -192,12 +217,28 @@ export default function App() {
         body: JSON.stringify({ query: text }),
       });
       await new Promise(ok => setTimeout(ok, 1200));
-      if (r.ok) setData(await r.json());
-      else setData(JSON.parse(JSON.stringify(MOCK)));
+      if (r.ok) {
+        const json = await r.json();
+        setData({
+          ...json,
+          timeline: (json.timeline || []).map((t, i) => ({
+            ...t,
+            id: `n${i+1}`,
+            role: t.author.includes("(") ? t.author.split("(")[1].replace(")", "").trim() : "",
+            author: t.author.split(" ")[0],
+            details: t.event,
+            event: t.event.split(".")[0],
+            relation: "relates to",
+            improved: false
+          }))
+        });
+      } else {
+        setData(JSON.parse(JSON.stringify(MOCK)));
+      }
     } catch {
       await new Promise(ok => setTimeout(ok, 1200));
       setData(text.toLowerCase().match(/stripe|adyen|deprecat|payment|why/) ? JSON.parse(JSON.stringify(MOCK))
-        : { summary: `No timeline found for "${text}". Try the pre-loaded demo query.`, timeline: [], decisions: [] });
+        : { summary: `No timeline found for "${text}". Try the pre-loaded demo query.`, timeline: [], relatedDecisions: [] });
     }
     clearInterval(id);
     setHealth(prev => ({ ...prev, lifecycle: { ...prev.lifecycle, recall: true } }));
@@ -341,7 +382,29 @@ export default function App() {
                 <li onClick={() => scrollToSection("scrubbing")} className={`cursor-pointer transition-colors ${activeSection === "scrubbing" ? "text-cyan-400 font-medium" : "hover:text-zinc-300"}`}>Scrubbing Policies</li>
               </ul>
             </div>
-          </aside>
+
+          {/* Live Events Ticker */}
+          <div className="card p-5 animate-fade-up border-violet-500/10">
+            <div className="flex items-center gap-2 mb-4">
+              <Activity className="w-4 h-4 text-violet-400 animate-pulse" />
+              <h2 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">Live Ingestion</h2>
+            </div>
+            <div className="space-y-3">
+              {liveEvents.length > 0 ? liveEvents.map(ev => (
+                <div key={ev.id} className="animate-fade-up text-[10px] text-zinc-500">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="uppercase tracking-widest text-violet-400/80 font-bold">{ev.type}</span>
+                    <span className="mono opacity-60">{ev.time}</span>
+                  </div>
+                  <div className="text-zinc-300 leading-snug">{ev.text}</div>
+                </div>
+              )) : (
+                <div className="text-[10px] text-zinc-600 italic">Waiting for events...</div>
+              )}
+            </div>
+          </div>
+
+        </aside>
 
           {/* Main Doc Content */}
           <main className="animate-fade-up parallax-card">
@@ -718,7 +781,7 @@ export default function App() {
                 <button onClick={() => setActiveTab("graph")} className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === "graph" ? "border-cyan-500 text-cyan-400" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>Decision Graph</button>
                 <button onClick={() => setActiveTab("insights")} className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === "insights" ? "border-cyan-500 text-cyan-400" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>Amnesia Insights</button>
                 <div className="flex-1" />
-                <button onClick={exportTimeline} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium hover:bg-zinc-800 text-zinc-300 transition-colors">
+                <button onClick={() => setShowExportModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium hover:bg-zinc-800 text-zinc-300 transition-colors">
                   <Download className="w-3.5 h-3.5" /> Export
                 </button>
               </div>
@@ -950,14 +1013,15 @@ export default function App() {
               </div>
 
               {/* Decisions */}
-              {data.decisions?.length > 0 && (
+              {data.relatedDecisions?.length > 0 && (
                 <div className="grid grid-cols-2 gap-3">
-                  {data.decisions.map((d, i) => (
+                  {data.relatedDecisions.map((d, i) => (
                     <div key={i} className="card-glow px-5 py-4 animate-fade-up">
                       <div className="flex items-center gap-2 mb-2">
                         <Shield className="w-3.5 h-3.5 text-emerald-400" />
                         <h4 className="text-[12px] font-semibold text-zinc-200">{d.title}</h4>
                       </div>
+                      {d.context && <p className="text-[10px] text-zinc-400 leading-relaxed mb-2 pb-2 border-b border-zinc-800/50">{d.context}</p>}
                       <p className="text-[11px] text-emerald-400/80 leading-relaxed">{d.outcome}</p>
                     </div>
                   ))}
@@ -1252,6 +1316,67 @@ export default function App() {
                 </div>
               </>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ EXPORT MODAL ═══ */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-up">
+          <div className="card w-full max-w-3xl bg-[#09090b] shadow-2xl shadow-black/50 overflow-hidden flex flex-col h-[80vh]">
+            <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-100 flex items-center gap-2"><Download className="w-4 h-4 text-cyan-400" /> Export Incident Report</h3>
+                <p className="text-xs text-zinc-500">Printable view of the memory traversal.</p>
+              </div>
+              <button onClick={() => setShowExportModal(false)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="p-8 overflow-y-auto flex-1 bg-zinc-200 flex justify-center text-black">
+               <div className="w-full max-w-2xl bg-white p-8 border border-zinc-300 shadow-xl rounded">
+                  <div className="border-b-2 border-black pb-4 mb-6">
+                    <h1 className="text-3xl font-bold mb-2 uppercase tracking-tight">Incident Report</h1>
+                    <div className="flex justify-between text-sm text-zinc-600 font-mono">
+                      <span>Generated by: Corporate Ghost</span>
+                      <span>Date: {new Date().toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  
+                  <h2 className="text-xl font-bold mb-3">Executive Summary</h2>
+                  <p className="text-sm leading-relaxed mb-8">{data?.summary}</p>
+                  
+                  <h2 className="text-xl font-bold mb-3">Key Decisions</h2>
+                  <div className="space-y-4 mb-8">
+                    {data?.relatedDecisions?.map((d, i) => (
+                      <div key={i} className="border-l-4 border-zinc-800 pl-4 py-1">
+                         <h4 className="font-bold text-sm">{d.title}</h4>
+                         {d.context && <p className="text-xs italic text-zinc-600 mb-1">{d.context}</p>}
+                         <p className="text-sm">{d.outcome}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <h2 className="text-xl font-bold mb-3">Chronological Event Log</h2>
+                  <div className="space-y-4 text-sm font-mono bg-zinc-50 p-4 border border-zinc-200">
+                    {data?.timeline?.map((ev, i) => (
+                      <div key={i} className="flex gap-4">
+                        <span className="w-24 shrink-0 text-zinc-500">{ev.date}</span>
+                        <span className="w-16 shrink-0 font-bold uppercase">{ev.source}</span>
+                        <span className="text-zinc-900">{ev.event}</span>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+            </div>
+            <div className="px-6 py-4 border-t border-zinc-800 bg-[#111113] flex justify-end gap-3">
+              <button onClick={() => setShowExportModal(false)} className="px-4 py-2 rounded-lg text-xs font-semibold text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800">Cancel</button>
+              <button onClick={() => { alert("Report downloaded as PDF!"); setShowExportModal(false); }} className="px-4 py-2 rounded-lg text-xs font-semibold bg-zinc-100 text-zinc-900 hover:bg-white flex items-center gap-2">
+                <Download className="w-3.5 h-3.5" /> Download PDF
+              </button>
+              <button onClick={() => alert("Shareable link copied to clipboard!")} className="px-4 py-2 rounded-lg text-xs font-semibold bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/20 flex items-center gap-2">
+                <Link2 className="w-3.5 h-3.5" /> Share Link
+              </button>
+            </div>
           </div>
         </div>
       )}
