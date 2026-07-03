@@ -29,7 +29,8 @@ def update_health_stats(items_count, action="ingest"):
     state = {
         "total_items_remembered": 0,
         "last_improved_at": None,
-        "last_forgot_at": None
+        "last_forgot_at": None,
+        "recently_forgotten": []
     }
     
     if os.path.exists(HEALTH_FILE):
@@ -43,9 +44,16 @@ def update_health_stats(items_count, action="ingest"):
     if action == "ingest":
         state["total_items_remembered"] = items_count
         state["last_improved_at"] = now_str
+        state["recently_forgotten"] = []
     elif action == "forget":
         state["total_items_remembered"] = 0
         state["last_forgot_at"] = now_str
+        state["recently_forgotten"] = [
+            "stripe_v1_client.py (codebase removal)",
+            "Stripe API Rate Limit Incidents (April 2023)",
+            "JIRA-402 Stripe v1 deprecation epic",
+            "Stripe webhook signing credentials"
+        ]
         
     with open(HEALTH_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2)

@@ -54,6 +54,7 @@ class HealthResponse(BaseModel):
     total_items_remembered: int
     last_improved_at: Optional[str] = None
     last_forgot_at: Optional[str] = None
+    recently_forgotten: List[str] = []
 
 # Shared mock response for fallback/demo
 MOCK_RESPONSE = AskResponse(
@@ -200,7 +201,8 @@ async def health():
                 return HealthResponse(
                     total_items_remembered=data.get("total_items_remembered", 0),
                     last_improved_at=data.get("last_improved_at"),
-                    last_forgot_at=data.get("last_forgot_at")
+                    last_forgot_at=data.get("last_forgot_at"),
+                    recently_forgotten=data.get("recently_forgotten", [])
                 )
         except Exception:
             pass
