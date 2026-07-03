@@ -15,6 +15,23 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["CACHING"] = "true"
 os.environ["CACHE_BACKEND"] = "fs"
 
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+
+import cognee
+
+def setup_cognee_config():
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    if gemini_key and gemini_key != "your_gemini_api_key_here":
+        cognee.config.set_llm_provider("gemini")
+        cognee.config.set_llm_model("gemini/gemini-2.5-flash")
+        cognee.config.set_llm_api_key(gemini_key)
+        cognee.config.set_embedding_provider("fastembed")
+        cognee.config.set_embedding_model("BAAI/bge-small-en-v1.5")
+        cognee.config.set_embedding_dimensions(384)
+
+setup_cognee_config()
+
 import cognee
 from ingestion.ingest import ingest_all, HEALTH_FILE, update_health_stats
 
@@ -54,60 +71,9 @@ class HealthResponse(BaseModel):
     total_items_remembered: int
     last_improved_at: Optional[str] = None
     last_forgot_at: Optional[str] = None
+    recently_forgotten: List[str] = []
 
-# Shared mock response for fallback/demo
-MOCK_RESPONSE = AskResponse(
-    summary="We deprecated the Stripe v1 payment gateway client because it suffered from rate-limiting errors on international retries and failed to satisfy PCI-DSS compliance requirements from our security audit. We migrated to Adyen to resolve these issues, routing all traffic successfully by Q1 2024 and subsequently removing the deprecated Stripe v1 code from our codebase.",
-    timeline=[
-      TimelineEvent(
-        source="slack",
-        author="Alice (Senior SRE)",
-        date="2023-04-12",
-        event="Flagged rate-limit spikes on Stripe v1 capture calls and suggested Jira ticket for deprecation due to PCI compliance issues.",
-        link="https://company.slack.com/archives/C12345/p1681283600"
-      ),
-      TimelineEvent(
-        source="jira",
-        author="Charlie (Backend Engineer)",
-        date="2023-05-02",
-        event="Created JIRA-402 to track deprecating Stripe v1 and migrating to Adyen. Targeted completion in Q1 2024.",
-        link="https://company.atlassian.net/browse/JIRA-402"
-      ),
-      TimelineEvent(
-        source="github",
-        author="Charlie (Backend Engineer)",
-        date="2023-10-15",
-        event="Merged PR-1145 integrating Adyen SDK, marking StripeClient as @deprecated, and gating traffic via feature flags.",
-        link="https://github.com/company/repo/pull/1145"
-      ),
-      TimelineEvent(
-        source="slack",
-        author="Bob (Lead Architect)",
-        date="2024-01-15",
-        event="Resolved Adyen webhook verification bug (commit a8f9c2d) and officially disabled Stripe v1 in production.",
-        link="https://company.slack.com/archives/C67890/p1705312000"
-      ),
-      TimelineEvent(
-        source="github",
-        author="Charlie (Backend Engineer)",
-        date="2024-02-28",
-        event="Merged PR-1290 removing all legacy Stripe v1 codebase files and clean up database tables.",
-        link="https://github.com/company/repo/pull/1290"
-      )
-    ],
-    relatedDecisions=[
-      DecisionRelation(
-        title="Migration from Stripe v1 to Adyen Gateway",
-        context="Stripe v1 API was rate-limiting international retries and failing security audits.",
-        outcome="Migrated to Adyen gateway. Improved transaction reliability and satisfied PCI-DSS standards."
-      ),
-      DecisionRelation(
-        title="Webhook Verification Hotfix",
-        context="Adyen webhook verification was using Stripe signing credentials after switchover.",
-        outcome="Updated webhook configuration to utilize Adyen credentials in commit a8f9c2d."
-      )
-    ]
-)
+
 
 @app.post("/api/ask", response_model=AskResponse)
 async def ask(payload: AskRequest):
@@ -116,19 +82,8 @@ async def ask(payload: AskRequest):
     Returns a unified decision timeline, summary, and related decisions.
     """
     query = payload.query.lower()
-    openai_key = os.environ.get("OPENAI_API_KEY")
     
-    # 1. Fallback if no OpenAI Key is set
-    if not openai_key or openai_key == "your_actual_api_key_here":
-        if any(x in query for x in ["stripe", "adyen", "deprecate", "payment", "why"]):
-            return MOCK_RESPONSE
-        return AskResponse(
-            summary="No relevant details found. Try asking 'why did we deprecate Stripe v1?'",
-            timeline=[],
-            relatedDecisions=[]
-        )
-
-    # 2. Query Cognee graph
+    # Query Cognee graph
     try:
         from cognee import SearchType
         # Run recall
@@ -140,21 +95,13 @@ async def ask(payload: AskRequest):
         
         if not results:
             return AskResponse(
-                summary="No memory matching your query was found in the graph.",
+                summary="No memory matching your query was found in the graph. Did you run the Ingestion step first?",
                 timeline=[],
                 relatedDecisions=[]
             )
             
         # Compile text results
         recalled_text = "\n".join([r.text for r in results if hasattr(r, "text")])
-        
-        # If the query is related to the Stripe/Adyen deprecated story, we build a timeline.
-        # For this hackathon MVP, we leverage the recalled text to synthesize or return
-        # the structured timeline. If it matches the Stripe story, we format the mock response
-        # with high fidelity.
-        if "stripe" in recalled_text.lower() or "adyen" in recalled_text.lower():
-            # Return high fidelity parsed values matching our story
-            return MOCK_RESPONSE
             
         return AskResponse(
             summary=recalled_text[:1000],
@@ -163,9 +110,6 @@ async def ask(payload: AskRequest):
         )
     except Exception as e:
         print(f"[API ERROR] Query recall failed: {e}")
-        # Graceful fallback to mock data on error so demo never breaks
-        if any(x in query for x in ["stripe", "adyen", "deprecate", "payment"]):
-            return MOCK_RESPONSE
         return AskResponse(
             summary=f"Error querying memory graph: {e}",
             timeline=[],
@@ -200,7 +144,8 @@ async def health():
                 return HealthResponse(
                     total_items_remembered=data.get("total_items_remembered", 0),
                     last_improved_at=data.get("last_improved_at"),
-                    last_forgot_at=data.get("last_forgot_at")
+                    last_forgot_at=data.get("last_forgot_at"),
+                    recently_forgotten=data.get("recently_forgotten", [])
                 )
         except Exception:
             pass
