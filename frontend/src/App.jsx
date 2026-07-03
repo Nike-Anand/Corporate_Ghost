@@ -1026,6 +1026,18 @@ export default function App() {
         {/* ═══ RIGHT: LIFECYCLE & MEMORY ═══ */}
         <aside className="flex flex-col gap-5">
 
+          {/* Actions */}
+          <div className="space-y-2 animate-fade-up">
+            <button onClick={() => setShowIntegrations(true)} disabled={loading}
+              className="w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-30 bg-gradient-to-r from-cyan-500/10 to-violet-500/10 border border-cyan-500/20 text-cyan-300 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/5 flex items-center justify-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Data Integrations
+            </button>
+            <button onClick={forget} disabled={loading || dissolving || health.total_items_remembered === 0}
+              className="w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-30 bg-zinc-900 border border-zinc-800 text-zinc-500 hover:border-red-500/30 hover:text-red-400 hover:shadow-lg hover:shadow-red-500/5 flex items-center justify-center gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> Scrub memory
+            </button>
+          </div>
+
           {/* Cognee Lifecycle */}
           <div className="card p-5 animate-fade-up">
             <div className="flex items-center gap-2 mb-5">
@@ -1093,17 +1105,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="space-y-2 animate-fade-up">
-            <button onClick={() => setShowIntegrations(true)} disabled={loading}
-              className="w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-30 bg-gradient-to-r from-cyan-500/10 to-violet-500/10 border border-cyan-500/20 text-cyan-300 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/5 flex items-center justify-center gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> Data Integrations
-            </button>
-            <button onClick={forget} disabled={loading || dissolving || health.total_items_remembered === 0}
-              className="w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-30 bg-zinc-900 border border-zinc-800 text-zinc-500 hover:border-red-500/30 hover:text-red-400 hover:shadow-lg hover:shadow-red-500/5 flex items-center justify-center gap-1.5">
-              <Trash2 className="w-3.5 h-3.5" /> Scrub memory
-            </button>
-          </div>
 
           {/* Quick queries */}
           <div className="animate-fade-up">
