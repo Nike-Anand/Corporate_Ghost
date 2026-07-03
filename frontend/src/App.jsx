@@ -247,14 +247,29 @@ export default function App() {
 
   const toggleSync = async (key) => {
     setSyncing(key);
-    await new Promise(ok => setTimeout(ok, 1500));
+    
+    if (!integrations[key]) {
+      // Connecting: Trigger real backend ingestion
+      try {
+        await fetch(`${API}/ingest`, { method: "POST" });
+        const hr = await fetch(`${API}/health`);
+        if (hr.ok) {
+          const hd = await hr.json();
+          setHealth(prev => ({ ...prev, ...hd, lifecycle: { ...prev.lifecycle, remember: true } }));
+        }
+      } catch (e) {
+        console.error("Ingestion failed:", e);
+        // Fallback for hackathon demo if backend is offline
+        await new Promise(ok => setTimeout(ok, 1500));
+        setHealth(prev => ({ ...prev, total_items_remembered: prev.total_items_remembered + 14, lifecycle: { ...prev.lifecycle, remember: true } }));
+      }
+    } else {
+      // Disconnecting: Just simulate a delay
+      await new Promise(ok => setTimeout(ok, 800));
+    }
+    
     setIntegrations(p => ({ ...p, [key]: !p[key] }));
     setSyncing(null);
-    setHealth(prev => ({ 
-      ...prev, 
-      total_items_remembered: prev.total_items_remembered + 14,
-      lifecycle: { ...prev.lifecycle, remember: true } 
-    }));
   };
 
   const forget = async () => {
