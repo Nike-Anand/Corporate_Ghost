@@ -36,7 +36,7 @@ has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
 
 if llm_provider == "gemini" or (has_gemini and not has_openai):
     os.environ["LLM_PROVIDER"] = "gemini"
-    os.environ["LLM_MODEL"] = "gemini/gemini-3.5-flash"
+    os.environ["LLM_MODEL"] = "gemini/gemini-2.5-flash"
     os.environ["LLM_API_KEY"] = gemini_key or ""
     os.environ["GEMINI_API_KEY"] = gemini_key or ""
     os.environ["EMBEDDING_PROVIDER"] = "fastembed"
@@ -294,7 +294,7 @@ async def ingest_all():
 
     if llm_provider == "gemini" or (has_gemini and not has_openai):
         cognee.config.set_llm_provider("gemini")
-        cognee.config.set_llm_model("gemini/gemini-3.5-flash")
+        cognee.config.set_llm_model("gemini/gemini-2.5-flash")
         if gemini_key:
             cognee.config.set_llm_api_key(gemini_key)
         cognee.config.set_embedding_provider("fastembed")
@@ -397,10 +397,7 @@ async def ingest_all():
     has_gemini = gemini_key and gemini_key != "your_gemini_api_key"
     
     if not (has_openai or has_gemini):
-        print("[WARNING] No valid LLM API key (OPENAI_API_KEY or GEMINI_API_KEY) found. Running in MOCK ingestion mode. Health state updated.")
-        update_health_stats(len(data_items), action="ingest")
-        print("Mock Ingestion Complete.")
-        return
+        raise ValueError("No valid LLM API key (OPENAI_API_KEY or GEMINI_API_KEY) found. Cannot run live ingestion.")
         
     try:
         # Call cognee remember

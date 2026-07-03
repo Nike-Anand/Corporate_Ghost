@@ -7,40 +7,6 @@ import {
   Users, UserPlus, ShieldAlert
 } from "lucide-react";
 
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   MOCK DATA
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-const MOCK = {
-  summary:
-    "Stripe v1 was deprecated due to rate-limiting on international retries and PCI-DSS compliance failures. The team migrated to Adyen, completing the rollout by Q1 2024.",
-  timeline: [
-    { id: "n1", source: "slack", author: "Alice", role: "Senior SRE", date: "2023-04-12",
-      event: "Flagged rate-limit spikes on Stripe v1 capture calls. Opened discussion on PCI compliance.",
-      details: "Production logs showed HTTP 429 spikes during peak hours. PCI-DSS failing because raw card data occasionally logged by Stripe v1 SDK.",
-      link: "#", relation: "reports", improved: false },
-    { id: "n2", source: "jira", author: "Charlie", role: "Backend Engineer", date: "2023-05-02",
-      event: "Created JIRA-402 — deprecate Stripe v1, migrate to Adyen. Target: Q1 2024.",
-      details: "Epic assigned to backend team. Tracks deprecation milestone, feature flag gates, and API schema mapping.",
-      link: "#", relation: "tracks", improved: false },
-    { id: "n3", source: "github", author: "Charlie", role: "Backend Engineer", date: "2023-10-15",
-      event: "Merged PR #1145 — Adyen SDK integration, StripeClient marked @deprecated.",
-      details: "Integrates Adyen payments client, adds feature flag config, marks StripeClient methods deprecated with a sunset date.",
-      link: "#", relation: "implements", improved: false },
-    { id: "n4", source: "slack", author: "Bob", role: "Lead Architect", date: "2024-01-15",
-      event: "Hotfixed Adyen webhook verification. Stripe v1 officially disabled in prod.",
-      details: "Commit a8f9c2d fixes Adyen webhook signing. All traffic switched to 100% Adyen. Stripe API keys rotated.",
-      link: "#", relation: "resolves", improved: false },
-    { id: "n5", source: "github", author: "Charlie", role: "Backend Engineer", date: "2024-02-28",
-      event: "PR #1290 — removed all legacy Stripe v1 code and database tables.",
-      details: "Deletes StripeClient.py, removes config keys, scrubs legacy database tables. JIRA-402 closed as Done.",
-      link: "#", relation: "deletes", improved: false },
-  ],
-  relatedDecisions: [
-    { title: "Stripe → Adyen migration", context: "Stripe v1 API was rate-limiting international retries and failing security audits.", outcome: "Improved reliability and PCI-DSS compliance." },
-    { title: "Webhook signing hotfix", context: "Adyen webhook verification was using Stripe signing credentials after switchover.", outcome: "Corrected credential mismatch after switchover." },
-  ],
-};
-
 const API = "http://localhost:8000/api";
 
 const SCAN_LINES = [
@@ -80,10 +46,6 @@ export default function App() {
   // New Features State
   const [showIntegrations, setShowIntegrations] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [liveEvents, setLiveEvents] = useState([
-    { id: 1, type: "slack", text: "Indexing thread in #engineering-backend", time: new Date(Date.now() - 60000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) },
-    { id: 2, type: "jira", text: "Parsing JIRA-824 epic", time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }
-  ]);
   const [integrations, setIntegrations] = useState({ slack: true, jira: true, github: true, notion: false });
   const [syncing, setSyncing] = useState(null);
   const [filterSrc, setFilterSrc] = useState({ slack: true, jira: true, github: true });
@@ -148,26 +110,6 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (appView !== "app") return;
-    const MOCK_EVENTS = [
-      { type: "slack", text: "Indexing thread in #engineering" },
-      { type: "jira", text: "Parsing JIRA-824 epic" },
-      { type: "github", text: "Ingesting commit d3f9a1" },
-      { type: "slack", text: "Mapping user 'Alice' to nodes" },
-      { type: "github", text: "Extracting diff for PR #1145" }
-    ];
-    const id = setInterval(() => {
-      setLiveEvents(prev => {
-        const nextEvent = MOCK_EVENTS[Math.floor(Math.random() * MOCK_EVENTS.length)];
-        const next = [...prev, { id: Date.now(), ...nextEvent, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }];
-        if (next.length > 5) next.shift();
-        return next;
-      });
-    }, 4500);
-    return () => clearInterval(id);
-  }, [appView]);
-
   /* ── mouse parallax tracking ── */
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -216,7 +158,6 @@ export default function App() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text }),
       });
-      await new Promise(ok => setTimeout(ok, 1200));
       if (r.ok) {
         const json = await r.json();
         setData({
@@ -233,12 +174,10 @@ export default function App() {
           }))
         });
       } else {
-        setData(JSON.parse(JSON.stringify(MOCK)));
+        setData({ summary: `Error: API returned ${r.status}`, timeline: [], relatedDecisions: [] });
       }
-    } catch {
-      await new Promise(ok => setTimeout(ok, 1200));
-      setData(text.toLowerCase().match(/stripe|adyen|deprecat|payment|why/) ? JSON.parse(JSON.stringify(MOCK))
-        : { summary: `No timeline found for "${text}". Try the pre-loaded demo query.`, timeline: [], relatedDecisions: [] });
+    } catch (err) {
+      setData({ summary: `Failed to connect to the backend: ${err.message}`, timeline: [], relatedDecisions: [] });
     }
     clearInterval(id);
     setHealth(prev => ({ ...prev, lifecycle: { ...prev.lifecycle, recall: true } }));
@@ -259,9 +198,6 @@ export default function App() {
         }
       } catch (e) {
         console.error("Ingestion failed:", e);
-        // Fallback for hackathon demo if backend is offline
-        await new Promise(ok => setTimeout(ok, 1500));
-        setHealth(prev => ({ ...prev, total_items_remembered: prev.total_items_remembered + 14, lifecycle: { ...prev.lifecycle, remember: true } }));
       }
     } else {
       // Disconnecting: Just simulate a delay
@@ -397,27 +333,6 @@ export default function App() {
                 <li onClick={() => scrollToSection("scrubbing")} className={`cursor-pointer transition-colors ${activeSection === "scrubbing" ? "text-cyan-400 font-medium" : "hover:text-zinc-300"}`}>Scrubbing Policies</li>
               </ul>
             </div>
-
-          {/* Live Events Ticker */}
-          <div className="card p-5 animate-fade-up border-violet-500/10">
-            <div className="flex items-center gap-2 mb-4">
-              <Activity className="w-4 h-4 text-violet-400 animate-pulse" />
-              <h2 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">Live Ingestion</h2>
-            </div>
-            <div className="space-y-3">
-              {liveEvents.length > 0 ? liveEvents.map(ev => (
-                <div key={ev.id} className="animate-fade-up text-[10px] text-zinc-500">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="uppercase tracking-widest text-violet-400/80 font-bold">{ev.type}</span>
-                    <span className="mono opacity-60">{ev.time}</span>
-                  </div>
-                  <div className="text-zinc-300 leading-snug">{ev.text}</div>
-                </div>
-              )) : (
-                <div className="text-[10px] text-zinc-600 italic">Waiting for events...</div>
-              )}
-            </div>
-          </div>
 
         </aside>
 
@@ -1080,7 +995,7 @@ export default function App() {
                   from Slack, Jira, and GitHub — connected through Cognee's knowledge graph.
                 </p>
 
-                <button onClick={() => { setQuery("Why did we deprecate Stripe v1?"); ask("Why did we deprecate Stripe v1?"); }}
+                <button onClick={() => { setQuery("Why did the legacy gateway fail?"); ask("Why did the legacy gateway fail?"); }}
                   className="px-6 py-3 rounded-xl bg-zinc-100 hover:bg-white text-zinc-900 text-sm font-semibold flex items-center gap-2.5 shadow-lg shadow-white/5 mb-10">
                   <Play className="w-4 h-4 fill-current" /> Run demo query
                 </button>
@@ -1194,7 +1109,7 @@ export default function App() {
           <div className="animate-fade-up">
             <h2 className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest mb-2">Demo queries</h2>
             <div className="space-y-1.5">
-              {["Why did we deprecate Stripe v1?", "What caused the webhook failure?"].map(q => (
+              {["Why did the legacy gateway fail?", "What was PR 442 for?"].map(q => (
                 <button key={q} onClick={() => { setQuery(q); ask(q); }}
                   className="w-full text-left text-[11px] px-3 py-2.5 rounded-xl bg-zinc-900/40 border border-zinc-800/50 text-zinc-500 hover:text-cyan-300 hover:border-cyan-500/20 group flex items-center justify-between">
                   <span className="truncate">{q}</span><ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 text-cyan-500 shrink-0 ml-2" />
