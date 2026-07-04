@@ -1,9 +1,9 @@
 import os
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import sys
@@ -96,17 +96,27 @@ class DecisionRelation(BaseModel):
     outcome: str
 
 class AskResponse(BaseModel):
+    query: str
     summary: str
+    memory_type: str = "corporate"
+    memory_found: bool = True
+    confidence: float = 0.8
     timeline: List[TimelineEvent]
     relatedDecisions: List[DecisionRelation]
+    sources: List[str] = Field(default_factory=list)
+    generated_at: str
 
 class HealthResponse(BaseModel):
     total_items_remembered: int
     last_improved_at: Optional[str] = None
     last_forgot_at: Optional[str] = None
 
+def current_timestamp():
+    return datetime.now(timezone.utc).isoformat()
+
 # Shared mock response for fallback/demo
 MOCK_RESPONSE = AskResponse(
+    query="Why did we deprecate Stripe v1?",
     summary="We deprecated the Stripe v1 payment gateway client because it suffered from rate-limiting errors on international retries and failed to satisfy PCI-DSS compliance requirements from our security audit. We migrated to Adyen to resolve these issues, routing all traffic successfully by Q1 2024 and subsequently removing the deprecated Stripe v1 code from our codebase.",
     timeline=[
       TimelineEvent(
@@ -156,7 +166,12 @@ MOCK_RESPONSE = AskResponse(
         context="Adyen webhook verification was using Stripe signing credentials after switchover.",
         outcome="Updated webhook configuration to utilize Adyen credentials in commit a8f9c2d."
       )
-    ]
+    ],
+    memory_type="corporate",
+    memory_found=True,
+    confidence=0.95,
+    sources=["slack", "jira", "github"],
+    generated_at=current_timestamp()
 )
 
 @app.post("/api/ask", response_model=AskResponse)
@@ -170,10 +185,16 @@ async def ask(payload: AskRequest):
         if any(x in query for x in ["stripe", "adyen", "deprecate", "payment", "gateway"]):
             return MOCK_RESPONSE
         return AskResponse(
-            summary="No relevant details found. Try asking 'why did we deprecate Stripe v1?'",
-            timeline=[],
-            relatedDecisions=[]
-        )
+        query=payload.query,
+        summary="No relevant details found. Try asking 'why did we deprecate Stripe v1?'",
+        memory_type="corporate",
+        memory_found=False,
+        confidence=0.0,
+        timeline=[],
+        relatedDecisions=[],
+        sources=[],
+        generated_at=current_timestamp()
+    )
 
     # 2. Query Cognee graph
     try:
@@ -187,10 +208,16 @@ async def ask(payload: AskRequest):
         
         if not results:
             return AskResponse(
-                summary="No memory matching your query was found in the graph.",
-                timeline=[],
-                relatedDecisions=[]
-            )
+    query=payload.query,
+    summary="No memory matching your query was found in the graph.",
+    memory_type="corporate",
+    memory_found=False,
+    confidence=0.0,
+    timeline=[],
+    relatedDecisions=[],
+    sources=[],
+    generated_at=current_timestamp()
+)
             
         # Compile text results
         recalled_text = "\n".join([r.text for r in results if hasattr(r, "text")])
@@ -204,20 +231,32 @@ async def ask(payload: AskRequest):
             return MOCK_RESPONSE
             
         return AskResponse(
-            summary=recalled_text[:1000],
-            timeline=[],
-            relatedDecisions=[]
-        )
+    query=payload.query,
+    summary=recalled_text[:1000],
+    memory_type="corporate",
+    memory_found=True,
+    confidence=0.75,
+    timeline=[],
+    relatedDecisions=[],
+    sources=["cognee"],
+    generated_at=current_timestamp()
+)
     except Exception as e:
         print(f"[API ERROR] Query recall failed: {e}")
         # Graceful fallback to mock data on error so demo never breaks
         if any(x in query for x in ["stripe", "adyen", "deprecate", "payment"]):
             return MOCK_RESPONSE
         return AskResponse(
-            summary=f"Error querying memory graph: {e}",
-            timeline=[],
-            relatedDecisions=[]
-        )
+    query=payload.query,
+    summary=f"Error querying memory graph: {e}",
+    memory_type="corporate",
+    memory_found=False,
+    confidence=0.0,
+    timeline=[],
+    relatedDecisions=[],
+    sources=[],
+    generated_at=current_timestamp()
+)
 
 @app.post("/api/forget")
 async def forget():
