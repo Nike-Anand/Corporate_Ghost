@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"; 
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"; 
 import {
   MessageSquare, GitPullRequest, CheckSquare, Trash2, RefreshCw,
   Send, ExternalLink, Ghost, X, Brain, ArrowRight, Play, Zap, 
@@ -6,6 +6,196 @@ import {
   Shield, CircleDot, Search, Filter, Download, Plus, Check, Link2, AlertTriangle, Network,
   Users, UserPlus, ShieldAlert
 } from "lucide-react";
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PARTICLES BACKGROUND
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function ParticlesCanvas() {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    let W = canvas.width = window.innerWidth;
+    let H = canvas.height = window.innerHeight;
+    let mouse = { x: W / 2, y: H / 2 };
+    const N = 80;
+    const particles = Array.from({ length: N }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
+      r: Math.random() * 1.5 + 0.5,
+      alpha: Math.random() * 0.5 + 0.1,
+    }));
+    const onResize = () => { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; };
+    const onMouse = (e) => { mouse = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("mousemove", onMouse);
+    let raf;
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+      particles.forEach(p => {
+        // subtle mouse attraction
+        const dx = mouse.x - p.x, dy = mouse.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 200) { p.vx += dx / dist * 0.015; p.vy += dy / dist * 0.015; }
+        p.vx *= 0.98; p.vy *= 0.98;
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+        if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(6,182,212,${p.alpha})`;
+        ctx.fill();
+      });
+      // draw edges between close particles
+      for (let i = 0; i < N; i++) {
+        for (let j = i + 1; j < N; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < 120) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(6,182,212,${0.08 * (1 - d / 120)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", onResize); window.removeEventListener("mousemove", onMouse); };
+  }, []);
+  return <canvas ref={canvasRef} id="particles-canvas" />;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   TYPEWRITER HOOK
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function useTypewriter(text, speed = 45, startDelay = 0) {
+  const [displayed, setDisplayed] = useState("");
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    setDisplayed(""); setDone(false);
+    let i = 0;
+    const t = setTimeout(() => {
+      const id = setInterval(() => {
+        i++;
+        setDisplayed(text.slice(0, i));
+        if (i >= text.length) { clearInterval(id); setDone(true); }
+      }, speed);
+      return () => clearInterval(id);
+    }, startDelay);
+    return () => clearTimeout(t);
+  }, [text, speed, startDelay]);
+  return { displayed, done };
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SHUFFLE TEXT COMPONENT
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%";
+function ShuffleText({ text, trigger, className = "" }) {
+  const [chars, setChars] = useState(text.split(""));
+  const rafRef = useRef(null);
+  useEffect(() => {
+    if (!trigger) return;
+    let iter = 0;
+    const total = text.length * 3;
+    const animate = () => {
+      setChars(text.split("").map((c, i) => {
+        if (i < iter / 3) return c;
+        return c === " " ? " " : CHARS[Math.floor(Math.random() * CHARS.length)];
+      }));
+      iter++;
+      if (iter <= total) rafRef.current = requestAnimationFrame(animate);
+      else setChars(text.split(""));
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [trigger, text]);
+  return (
+    <span className={className}>
+      {chars.map((c, i) => <span key={i} className={`shuffle-char${c !== text[i] ? " scrambling" : ""}`}>{c}</span>)}
+    </span>
+  );
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MAGNETIC BUTTON HOOK
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function useMagnetic(strength = 0.35) {
+  const ref = useRef(null);
+  const onMove = useCallback((e) => {
+    const el = ref.current; if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = (e.clientX - cx) * strength;
+    const dy = (e.clientY - cy) * strength;
+    el.style.transform = `translate(${dx}px, ${dy}px)`;
+  }, [strength]);
+  const onLeave = useCallback(() => {
+    if (ref.current) ref.current.style.transform = "translate(0,0)";
+  }, []);
+  return { ref, onMouseMove: onMove, onMouseLeave: onLeave };
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   TILT CARD HOOK
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function useTilt(max = 8) {
+  const ref = useRef(null);
+  const onMove = useCallback((e) => {
+    const el = ref.current; if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width - 0.5) * max * 2;
+    const y = ((e.clientY - rect.top) / rect.height - 0.5) * max * -2;
+    el.style.transform = `perspective(600px) rotateX(${y}deg) rotateY(${x}deg) scale(1.02)`;
+  }, [max]);
+  const onLeave = useCallback(() => {
+    if (ref.current) ref.current.style.transform = "perspective(600px) rotateX(0) rotateY(0) scale(1)";
+  }, []);
+  return { ref, onMouseMove: onMove, onMouseLeave: onLeave };
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MOUSE PARTICLE TRAIL
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function useMouseTrail() {
+  useEffect(() => {
+    let last = 0;
+    const colors = ["#06b6d4", "#a855f7", "#10b981"];
+    const handler = (e) => {
+      const now = Date.now();
+      if (now - last < 40) return;
+      last = now;
+      const el = document.createElement("div");
+      el.className = "mouse-particle";
+      const size = Math.random() * 6 + 3;
+      el.style.cssText = `left:${e.clientX}px;top:${e.clientY}px;width:${size}px;height:${size}px;background:${colors[Math.floor(Math.random()*colors.length)]};box-shadow:0 0 ${size*2}px currentColor;`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 800);
+    };
+    window.addEventListener("mousemove", handler);
+    return () => window.removeEventListener("mousemove", handler);
+  }, []);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   GLITCH HOOK
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function useGlitch(trigger) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!trigger || !ref.current) return;
+    ref.current.classList.add("glitching");
+    const t = setTimeout(() => ref.current?.classList.remove("glitching"), 400);
+    return () => clearTimeout(t);
+  }, [trigger]);
+  return ref;
+}
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    MOCK DATA
@@ -36,8 +226,8 @@ const MOCK = {
       link: "#", relation: "deletes", improved: false },
   ],
   relatedDecisions: [
-    { title: "Stripe → Adyen migration", context: "Stripe v1 API was rate-limiting international retries and failing security audits.", outcome: "Improved reliability and PCI-DSS compliance." },
-    { title: "Webhook signing hotfix", context: "Adyen webhook verification was using Stripe signing credentials after switchover.", outcome: "Corrected credential mismatch after switchover." },
+    { title: "Migration from Stripe v1 to Adyen Gateway", context: "Stripe v1 API was rate-limiting international retries and failing security audits.", outcome: "Migrated to Adyen gateway. Improved transaction reliability and satisfied PCI-DSS standards." },
+    { title: "Webhook Verification Hotfix", context: "Adyen webhook verification was using Stripe signing credentials after switchover.", outcome: "Updated webhook configuration to utilize Adyen credentials in commit a8f9c2d." },
   ],
 };
 
@@ -95,11 +285,40 @@ export default function App() {
   // Team & Approval State
   const [currentRoute, setCurrentRoute] = useState("dashboard"); // "dashboard" or "team"
   const [scrubStatus, setScrubStatus] = useState("idle"); // "idle", "pending", "approved"
-  const [teamMembers, setTeamMembers] = useState([
-    { id: 1, name: "Alice Chen", role: "Head of Engineering", email: "alice@corp.com", avatar: "AC" },
-    { id: 2, name: "Marcus Johnson", role: "Senior SRE", email: "marcus@corp.com", avatar: "MJ" },
-    { id: 3, name: "Sarah Smith", role: "Product Manager", email: "sarah@corp.com", avatar: "SS" }
-  ]);
+  const teamMembers = useMemo(() => {
+    const members = [];
+    if (integrations.slack) {
+      members.push({ id: 1, name: "Alice Chen", role: "Head of Engineering", email: "alice@corp.com", avatar: "AC" });
+    }
+    if (integrations.github) {
+      members.push({ id: 2, name: "Marcus Johnson", role: "Senior SRE", email: "marcus@corp.com", avatar: "MJ" });
+    }
+    if (integrations.jira) {
+      members.push({ id: 3, name: "Sarah Smith", role: "Product Manager", email: "sarah@corp.com", avatar: "SS" });
+    }
+    if (integrations.notion) {
+      members.push({ id: 4, name: "Elena Rostova", role: "Notion Architect", email: "elena@corp.com", avatar: "ER" });
+    }
+    
+    // Add authors from timeline events
+    const rawTl = data?.timeline || [];
+    rawTl.forEach((ev, idx) => {
+      const authorName = ev.author;
+      if (!authorName) return;
+      const exists = members.some(m => m.name.toLowerCase().startsWith(authorName.toLowerCase()));
+      if (!exists) {
+        members.push({
+          id: `dyn-${idx}`,
+          name: `${authorName} ${authorName === 'Charlie' ? 'Dev' : authorName === 'Bob' ? 'Architect' : 'Contributor'}`,
+          role: ev.role || "Contributor",
+          email: `${authorName.toLowerCase()}@corp.com`,
+          avatar: authorName.slice(0, 2).toUpperCase()
+        });
+      }
+    });
+    
+    return members;
+  }, [integrations, data?.timeline]);
 
   const [appView, setAppView] = useState("landing"); // "landing", "auth", "app"
   const [loginEmail, setLoginEmail] = useState("");
@@ -171,7 +390,7 @@ export default function App() {
   /* ── mouse parallax tracking ── */
   useEffect(() => {
     const handleMouseMove = (e) => {
-      const x = (e.clientX / window.innerWidth - 0.5) * 30; // -15 to 15
+      const x = (e.clientX / window.innerWidth - 0.5) * 30;
       const y = (e.clientY / window.innerHeight - 0.5) * 30;
       document.documentElement.style.setProperty('--mouse-x', `${x}px`);
       document.documentElement.style.setProperty('--mouse-y', `${y}px`);
@@ -179,6 +398,21 @@ export default function App() {
     window.addEventListener("mousemove", handleMouseMove);
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
+
+  /* ── effects ── */
+  useMouseTrail();
+  const [shuffleTrigger, setShuffleTrigger] = useState(0);
+  const [lineDrawn, setLineDrawn] = useState(false);
+  const glitchRef = useGlitch(loading);
+  const magAsk = useMagnetic(0.3);
+  const magDemo = useMagnetic(0.3);
+  const tiltAuth = useTilt(6);
+  const { displayed: twTitle, done: twDone } = useTypewriter("Corporate Ghost is remembering...", 40, 200);
+
+  useEffect(() => {
+    if (data) { setShuffleTrigger(t => t + 1); setTimeout(() => setLineDrawn(true), 300); }
+    else setLineDrawn(false);
+  }, [data]);
 
   /* ── animate nodes appearing ── */
   useEffect(() => {
@@ -273,6 +507,8 @@ export default function App() {
   };
 
   const forget = async () => {
+    if (scrubStatus === "pending" || dissolving) return; // Prevent double clicks
+    
     if (scrubStatus === "idle") {
       setScrubStatus("pending");
       await new Promise(ok => setTimeout(ok, 3000));
@@ -285,13 +521,28 @@ export default function App() {
     setSelected(null);
     setDissolving(true);
     await new Promise(ok => setTimeout(ok, 2000));
-    try { await fetch(`${API}/forget`, { method: "POST" }); } catch {}
-    setHealth({
-      total_items_remembered: 0, last_improved_at: null,
-      last_forgot_at: new Date().toISOString(),
-      recently_forgotten: ["stripe_v1_client.py", "JIRA-402 epic", "Adyen webhook creds"],
-      lifecycle: { remember: false, improve: false, recall: false, forget: true },
-    });
+    try {
+      await fetch(`${API}/forget`, { method: "POST" });
+      const hr = await fetch(`${API}/health`);
+      if (hr.ok) {
+        const hd = await hr.json();
+        setHealth(prev => ({
+          ...prev,
+          ...hd,
+          lifecycle: { ...prev.lifecycle, forget: true }
+        }));
+      } else {
+        throw new Error("Health fetch failed");
+      }
+    } catch {
+      // Fallback local health update if API fails/offline
+      setHealth({
+        total_items_remembered: 0, last_improved_at: null,
+        last_forgot_at: new Date().toISOString(),
+        recently_forgotten: ["stripe_v1_client.py", "JIRA-402 epic", "Adyen webhook creds"],
+        lifecycle: { remember: false, improve: false, recall: false, forget: true },
+      });
+    }
     setData({ summary: "Memory scrubbed. All nodes have been permanently forgotten.", timeline: [], decisions: [] });
     setDissolving(false);
   };
@@ -339,15 +590,31 @@ export default function App() {
 
   const sel = selected !== null ? tl[selected] : null;
 
-  /* node positions */
-  const flowPos = [{ x: 100, y: 170 },{ x: 285, y: 170 },{ x: 470, y: 170 },{ x: 655, y: 170 },{ x: 840, y: 170 }];
-  const netPos  = [{ x: 150, y: 90 },{ x: 170, y: 270 },{ x: 730, y: 90 },{ x: 710, y: 270 },{ x: 440, y: 55 }];
-  const pos = (i) => (view === "flow" ? flowPos : netPos)[i] || { x: 100 + i * 185, y: 170 };
+  /* node positions — dynamic based on tl.length */
+  const FLOW_Y = 170;
+  const CANVAS_W = view === "flow" ? Math.max(940, tl.length * 185 + 100) : 940;
+  const flowPos = tl.map((_, i) => ({ x: 100 + i * Math.min(185, (CANVAS_W - 200) / Math.max(tl.length - 1, 1)), y: FLOW_Y }));
+  const netCx = CANVAS_W / 2;
+  const netCy = 175;
+  const netR = 120;
+  const netPos = tl.map((_, i) => ({
+    x: netCx + netR * Math.cos((2 * Math.PI * i) / tl.length - Math.PI / 2),
+    y: netCy + netR * Math.sin((2 * Math.PI * i) / tl.length - Math.PI / 2),
+  }));
+  const pos = (i) => (view === "flow" ? flowPos : netPos)[i] || { x: 100 + i * 185, y: FLOW_Y };
+
+  /* dynamic amnesia insights derived from timeline */
+  const orphaned = rawTl.filter(ev => !ev.improved);
+  const linkedCount = rawTl.filter(ev => ev.improved || ev.relation !== "relates to").length;
+  const completeness = rawTl.length > 0 ? Math.round((linkedCount / rawTl.length) * 100) : 0;
+  const srcCounts = rawTl.reduce((acc, ev) => { acc[ev.source] = (acc[ev.source] || 0) + 1; return acc; }, {});
+  const dominantSrc = Object.entries(srcCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || "—";
 
   /* ━━━━━━ RENDER ━━━━━━ */
   if (appView === "landing") {
     return (
       <div className="min-h-screen flex flex-col relative text-zinc-200">
+        <ParticlesCanvas />
         <div className="ambient-mesh" />
         <div className="noise-overlay" />
         
@@ -652,14 +919,15 @@ export default function App() {
   if (appView === "auth") {
     return (
       <div className="min-h-screen flex items-center justify-center relative text-zinc-200">
+        <ParticlesCanvas />
         <div className="ambient-mesh" />
         <div className="noise-overlay" />
-        <div className="card w-full max-w-md p-10 relative z-10 animate-fade-up flex flex-col items-center parallax-card">
+        <div {...tiltAuth} className="card tilt-card w-full max-w-md p-10 relative z-10 animate-fade-up flex flex-col items-center">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/10 via-violet-500/10 to-emerald-500/10 border border-zinc-800 flex items-center justify-center mb-6 shadow-lg shadow-cyan-500/5">
             <Ghost className="w-8 h-8 text-cyan-400" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-100 tracking-tight mb-2">Corporate Ghost</h1>
-          <p className="text-sm text-zinc-500 mb-8 text-center">Sign in to access the incident memory layer.</p>
+          <h1 className="text-2xl font-bold text-zinc-100 tracking-tight mb-2 glitch" data-text="Corporate Ghost" ref={glitchRef}>Corporate Ghost</h1>
+          <p className="text-sm text-zinc-500 mb-8 text-center typewriter-cursor">{twTitle}</p>
           
           <div className="w-full space-y-4 mb-8">
             <div>
@@ -686,6 +954,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col relative text-zinc-200">
+      <ParticlesCanvas />
       <div className="ambient-mesh" />
       <div className="noise-overlay" />
 
@@ -709,11 +978,22 @@ export default function App() {
               <button onClick={() => setCurrentRoute("team")} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${currentRoute === "team" ? "bg-zinc-800/60 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>Team</button>
             </div>
           </div>
-          <div className="flex items-center gap-5 text-[11px] text-zinc-500 mono">
+          <div className="flex items-center gap-4 text-[11px] text-zinc-500 mono">
+            <button onClick={async () => {
+              try {
+                const r = await fetch(`${API}/health`);
+                if (r.ok) {
+                  const d = await r.json();
+                  setHealth(prev => ({ ...prev, ...d }));
+                }
+              } catch {}
+            }} className="flex items-center gap-1.5 hover:text-cyan-400 transition-colors bg-zinc-900 border border-zinc-800 px-2 py-1 rounded" title="Refresh health stats">
+              <RefreshCw className="w-3.5 h-3.5" /> refresh
+            </button>
             <button onClick={() => setShowIntegrations(true)} className="flex items-center gap-1.5 hover:text-cyan-400 transition-colors bg-zinc-900 border border-zinc-800 px-2 py-1 rounded">
               <Link2 className="w-3.5 h-3.5" /> integrations
             </button>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5 text-zinc-400">
               <span className={`w-2 h-2 rounded-full ${health.total_items_remembered > 0 ? "bg-emerald-500" : "bg-zinc-600"} animate-glow-pulse`} style={{ color: health.total_items_remembered > 0 ? "#10b981" : "#52525b" }} />
               {health.total_items_remembered} nodes
             </span>
@@ -740,15 +1020,16 @@ export default function App() {
                   placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/10" />
             </div>
             <button onClick={() => ask()} disabled={loading}
-              className="px-5 py-3 rounded-xl bg-zinc-100 hover:bg-white text-zinc-900 text-sm font-semibold
+              {...magAsk}
+              className="magnetic px-5 py-3 rounded-xl bg-zinc-100 hover:bg-white text-zinc-900 text-sm font-semibold
                 disabled:opacity-30 flex items-center gap-2 shrink-0">
               {loading ? <RefreshCw className="w-4 h-4 animate-spin-ring" /> : <Send className="w-4 h-4" />}
               Ask
             </button>
           </div>
 
-          {/* ── AI SUMMARY ── */}
-          {!loading && data?.summary && (
+          {/* ── AI SUMMARY — only show when no timeline (fallback) ── */}
+          {!loading && data?.summary && rawTl.length === 0 && (
             <div className="card p-5 animate-fade-up border-cyan-500/20 bg-cyan-500/5 shadow-lg shadow-cyan-500/5">
               <div className="flex items-center gap-2 text-xs font-semibold text-cyan-400 uppercase tracking-widest mb-3">
                 <Sparkles className="w-4 h-4" />
@@ -796,6 +1077,10 @@ export default function App() {
                 <button onClick={() => setActiveTab("graph")} className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === "graph" ? "border-cyan-500 text-cyan-400" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>Decision Graph</button>
                 <button onClick={() => setActiveTab("insights")} className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors ${activeTab === "insights" ? "border-cyan-500 text-cyan-400" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>Amnesia Insights</button>
                 <div className="flex-1" />
+                <button onClick={() => ask(query || "Why did we deprecate Stripe v1?")} disabled={loading} title="Refresh data"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium hover:bg-zinc-800 text-zinc-300 transition-colors mr-1">
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin-ring" : ""}`} /> Refresh
+                </button>
                 <button onClick={() => setShowExportModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-medium hover:bg-zinc-800 text-zinc-300 transition-colors">
                   <Download className="w-3.5 h-3.5" /> Export
                 </button>
@@ -839,13 +1124,16 @@ export default function App() {
                   </div>
 
                   {/* Canvas */}
-                  <div className="relative min-h-[340px] overflow-x-auto">
-                    <div className="w-[940px] h-[340px] relative grid-bg">
-                      <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                  <div className="relative min-h-[340px] overflow-x-auto overflow-y-visible">
+                    <div className="h-[340px] relative grid-bg" style={{ width: `${CANVAS_W}px`, minWidth: "100%" }}>
+                      <svg className="absolute inset-0 pointer-events-none" style={{ width: `${CANVAS_W}px`, height: "340px" }}>
                         {/* Edges */}
                         {view === "flow" && (<>
                           <polyline points={tl.map((_, i) => `${pos(i).x},${pos(i).y}`).join(" ")} fill="none" stroke="#27272a" strokeWidth="2" />
-                          <polyline points={tl.slice(0, nodesVisible).map((_, i) => `${pos(i).x},${pos(i).y}`).join(" ")} fill="none" stroke="#06b6d4" strokeWidth="2" className="animate-flow" strokeOpacity="0.6" />
+                          <polyline
+                            className={`line-draw${lineDrawn ? " drawn" : ""}`}
+                            points={tl.slice(0, nodesVisible).map((_, i) => `${pos(i).x},${pos(i).y}`).join(" ")}
+                            fill="none" stroke="#06b6d4" strokeWidth="2" strokeOpacity="0.6" />
                           {tl.slice(0, nodesVisible).map((ev, i) => (
                             <text key={i} x={pos(i).x} y={pos(i).y + 55} textAnchor="middle" className="mono" fill="#52525b" fontSize="9">{ev.date}</text>
                           ))}
@@ -854,7 +1142,7 @@ export default function App() {
                           const pt = pos(i);
                           const active = hovered === i || selected === i;
                           return i < nodesVisible ? (
-                            <line key={i} x1={pt.x} y1={pt.y} x2={440} y2={175}
+                            <line key={i} x1={pt.x} y1={pt.y} x2={netCx} y2={netCy}
                               stroke={active ? SRC[tl[i].source]?.color || "#06b6d4" : "#27272a"}
                               strokeWidth={active ? 2 : 1.5} opacity={active ? 0.9 : 0.5} className={active ? "animate-flow" : ""} />
                           ) : null;
@@ -892,7 +1180,9 @@ export default function App() {
                                 <Icon className={`w-4 h-4 ${src.text}`} />
                               </div>
                               <div>
-                                <div className="text-[12px] font-medium text-zinc-200 leading-tight">{ev.author}</div>
+                                <div className="text-[12px] font-medium text-zinc-200 leading-tight">
+                                  <ShuffleText text={ev.author} trigger={shuffleTrigger} />
+                                </div>
                                 <div className="mono text-[10px] text-zinc-500">{src.label}</div>
                               </div>
                             </div>
@@ -917,7 +1207,7 @@ export default function App() {
                       })}
 
                       {view === "network" && (
-                        <div style={{ left: 440, top: 175 }} className="absolute -translate-x-1/2 -translate-y-1/2 z-20 animate-spring-in">
+                        <div style={{ left: netCx, top: netCy }} className="absolute -translate-x-1/2 -translate-y-1/2 z-20 animate-spring-in">
                           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500/10 to-cyan-500/10 border-2 border-violet-500/30 flex items-center justify-center shadow-lg shadow-violet-500/10">
                             <Brain className="w-7 h-7 text-violet-400 animate-glow-pulse" style={{ color: "#a855f7" }} />
                           </div>
@@ -984,19 +1274,28 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                /* Insights Tab */
+                /* Insights Tab — fully dynamic */
                 <div className="card p-6 min-h-[340px] animate-fade-up">
-                  <h3 className="text-lg font-semibold text-zinc-200 mb-6">Amnesia Insights</h3>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-semibold text-zinc-200">Amnesia Insights</h3>
+                    <span className="mono text-[10px] text-zinc-600">{rawTl.length} events analysed</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="card-inset p-5 border-amber-500/20">
                       <div className="flex items-center gap-2 mb-3">
                         <AlertTriangle className="w-4 h-4 text-amber-500" />
-                        <h4 className="text-sm font-semibold text-amber-400">Orphaned Knowledge</h4>
+                        <h4 className="text-sm font-semibold text-amber-400">Orphaned Nodes</h4>
                       </div>
-                      <p className="text-xs text-zinc-400 mb-4 leading-relaxed">Nodes detected in the graph with 0 incoming or outgoing edges. These represent siloed decisions.</p>
-                      <ul className="space-y-2 mono text-[10px] text-zinc-300">
-                        <li className="flex gap-2"><span className="text-amber-500">•</span> [Slack] Discussion: "Should we use GraphQL?" (No linked Jira ticket)</li>
-                        <li className="flex gap-2"><span className="text-amber-500">•</span> [GitHub] PR #1022 "Add feature flag" (Missing documentation link)</li>
+                      <div className="text-3xl font-bold text-zinc-100 mb-1">{orphaned.length}</div>
+                      <p className="text-xs text-zinc-500 mb-3">events without human context added via improve()</p>
+                      <ul className="space-y-1.5 mono text-[10px] text-zinc-400 max-h-24 overflow-y-auto">
+                        {orphaned.slice(0, 4).map((ev, i) => (
+                          <li key={i} className="flex gap-2 items-start">
+                            <span className="text-amber-500 shrink-0">•</span>
+                            <span className="truncate">[{ev.source.toUpperCase()}] {ev.event.slice(0, 50)}{ev.event.length > 50 ? "…" : ""}</span>
+                          </li>
+                        ))}
+                        {orphaned.length > 4 && <li className="text-zinc-600">+{orphaned.length - 4} more…</li>}
                       </ul>
                     </div>
                     <div className="card-inset p-5 border-cyan-500/20">
@@ -1004,44 +1303,59 @@ export default function App() {
                         <Network className="w-4 h-4 text-cyan-500" />
                         <h4 className="text-sm font-semibold text-cyan-400">Context Completeness</h4>
                       </div>
-                      <div className="flex items-end gap-3 mb-2">
-                        <span className="text-3xl font-bold text-zinc-100">84%</span>
-                        <span className="text-xs text-emerald-400 mb-1">+12% this week</span>
+                      <div className="flex items-end gap-3 mb-3">
+                        <span className="text-3xl font-bold text-zinc-100">{completeness}%</span>
+                        <span className={`text-xs mb-1 ${completeness >= 50 ? "text-emerald-400" : "text-amber-400"}`}>
+                          {completeness >= 80 ? "✓ Healthy" : completeness >= 50 ? "⚠ Partial" : "✗ Low"}
+                        </span>
                       </div>
-                      <p className="text-xs text-zinc-400 leading-relaxed">Percentage of engineering decisions that have a complete lineage (Slack → Jira → GitHub).</p>
+                      <div className="w-full h-1.5 bg-zinc-800 rounded-full mb-3">
+                        <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 transition-all duration-700" style={{ width: `${completeness}%` }} />
+                      </div>
+                      <p className="text-xs text-zinc-500">Decisions with full lineage (Slack → Jira → GitHub)</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {Object.entries(srcCounts).map(([src, count]) => (
+                      <div key={src} className={`card-inset p-3 border ${SRC[src]?.border || "border-zinc-800/50"}`}>
+                        <div className={`text-[10px] font-bold uppercase tracking-widest ${SRC[src]?.text || "text-zinc-400"} mb-1`}>{src}</div>
+                        <div className="text-xl font-bold text-zinc-100">{count}</div>
+                        <div className="text-[10px] text-zinc-600">events</div>
+                      </div>
+                    ))}
+                    <div className="card-inset p-3 border-violet-500/20">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-violet-400 mb-1">Dominant</div>
+                      <div className="text-xl font-bold text-zinc-100 capitalize">{dominantSrc}</div>
+                      <div className="text-[10px] text-zinc-600">top source</div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Summary */}
-              <div className="card px-6 py-5 animate-fade-up">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <Sparkles className="w-4 h-4 text-cyan-400" />
-                  </div>
-                  <div>
-                    <div className="text-[10px] mono text-zinc-600 uppercase tracking-wider mb-1">Synthesized Answer</div>
-                    <p className="text-[13px] text-zinc-300 leading-relaxed">{data.summary}</p>
-                  </div>
+              {/* Synthesized Answer + Related Decisions */}
+              <div className="card px-6 py-5 animate-fade-up border-cyan-500/10">
+                <div className="flex items-center gap-2 text-xs font-semibold text-cyan-400 uppercase tracking-widest mb-3">
+                  <Sparkles className="w-3.5 h-3.5" /> Synthesized Answer
                 </div>
+                <p className="text-[13px] text-zinc-300 leading-relaxed mb-4">{data.summary}</p>
+                {data.relatedDecisions?.length > 0 && (
+                  <div className="border-t border-zinc-800/60 pt-4">
+                    <div className="text-[10px] mono text-zinc-600 uppercase tracking-wider mb-3">Related Decisions ({data.relatedDecisions.length})</div>
+                    <div className="grid grid-cols-1 gap-2">
+                      {data.relatedDecisions.map((d, i) => (
+                        <div key={i} className="flex gap-3 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/50 hover:border-emerald-500/20 transition-colors">
+                          <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <div className="text-[12px] font-semibold text-zinc-200 mb-0.5">{d.title}</div>
+                            {d.context && <p className="text-[10px] text-zinc-500 mb-1">{d.context}</p>}
+                            <p className="text-[11px] text-emerald-400/80">{d.outcome}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {/* Decisions */}
-              {data.relatedDecisions?.length > 0 && (
-                <div className="grid grid-cols-2 gap-3">
-                  {data.relatedDecisions.map((d, i) => (
-                    <div key={i} className="card-glow px-5 py-4 animate-fade-up">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                        <h4 className="text-[12px] font-semibold text-zinc-200">{d.title}</h4>
-                      </div>
-                      {d.context && <p className="text-[10px] text-zinc-400 leading-relaxed mb-2 pb-2 border-b border-zinc-800/50">{d.context}</p>}
-                      <p className="text-[11px] text-emerald-400/80 leading-relaxed">{d.outcome}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
@@ -1081,7 +1395,8 @@ export default function App() {
                 </p>
 
                 <button onClick={() => { setQuery("Why did we deprecate Stripe v1?"); ask("Why did we deprecate Stripe v1?"); }}
-                  className="px-6 py-3 rounded-xl bg-zinc-100 hover:bg-white text-zinc-900 text-sm font-semibold flex items-center gap-2.5 shadow-lg shadow-white/5 mb-10">
+                  {...magDemo}
+                  className="magnetic px-6 py-3 rounded-xl bg-zinc-100 hover:bg-white text-zinc-900 text-sm font-semibold flex items-center gap-2.5 shadow-lg shadow-white/5 mb-10">
                   <Play className="w-4 h-4 fill-current" /> Run demo query
                 </button>
 
@@ -1110,6 +1425,26 @@ export default function App() {
 
         {/* ═══ RIGHT: LIFECYCLE & MEMORY ═══ */}
         <aside className="flex flex-col gap-5">
+
+          {/* Actions */}
+          <div className="space-y-2 animate-fade-up">
+            <button onClick={() => setShowIntegrations(true)} disabled={loading}
+              className="w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-30 bg-gradient-to-r from-cyan-500/10 to-violet-500/10 border border-cyan-500/20 text-cyan-300 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/5 flex items-center justify-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Data Integrations
+            </button>
+            <button
+              onClick={forget}
+              disabled={loading || dissolving || health.total_items_remembered === 0 || scrubStatus === "pending"}
+              className={`w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-30 border flex items-center justify-center gap-1.5 transition-all
+                ${scrubStatus === "approved"
+                  ? "bg-red-500/20 border-red-500/50 text-red-300 shadow-lg shadow-red-500/10 animate-glow-pulse"
+                  : scrubStatus === "pending"
+                  ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                  : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-red-500/30 hover:text-red-400 hover:shadow-lg hover:shadow-red-500/5"}`}>
+              {scrubStatus === "pending" ? <RefreshCw className="w-3.5 h-3.5 animate-spin-ring" /> : <Trash2 className="w-3.5 h-3.5" />}
+              {scrubStatus === "pending" ? "Awaiting approval…" : scrubStatus === "approved" ? "⚠ Confirm Scrub" : "Scrub Memory"}
+            </button>
+          </div>
 
           {/* Cognee Lifecycle */}
           <div className="card p-5 animate-fade-up">
@@ -1151,7 +1486,13 @@ export default function App() {
 
           {/* Memory Health */}
           <div className="card p-5 animate-fade-up">
-            <h2 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest mb-4">Memory Health</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">Memory Health</h2>
+              <button onClick={() => fetch(`${API}/health`).then(r=>r.json()).then(d=>setHealth(p=>({...p,...d}))).catch(()=>{})}
+                className="p-1 rounded hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-colors" title="Refresh health">
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            </div>
             <div className="space-y-3 text-[13px]">
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 flex items-center gap-1.5"><Database className="w-3 h-3" /> Nodes</span>
@@ -1178,17 +1519,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="space-y-2 animate-fade-up">
-            <button onClick={() => setShowIntegrations(true)} disabled={loading}
-              className="w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-30 bg-gradient-to-r from-cyan-500/10 to-violet-500/10 border border-cyan-500/20 text-cyan-300 hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/5 flex items-center justify-center gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> Data Integrations
-            </button>
-            <button onClick={forget} disabled={loading || dissolving || health.total_items_remembered === 0}
-              className="w-full py-2.5 rounded-xl text-xs font-semibold disabled:opacity-30 bg-zinc-900 border border-zinc-800 text-zinc-500 hover:border-red-500/30 hover:text-red-400 hover:shadow-lg hover:shadow-red-500/5 flex items-center justify-center gap-1.5">
-              <Trash2 className="w-3.5 h-3.5" /> Scrub memory
-            </button>
-          </div>
 
           {/* Quick queries */}
           <div className="animate-fade-up">
