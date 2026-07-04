@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import sys
+from dotenv import load_dotenv
 
 # Add root folder to sys.path to resolve any shared imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,6 +15,55 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Enable filesystem cache
 os.environ["CACHING"] = "true"
 os.environ["CACHE_BACKEND"] = "fs"
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
+
+def get_env_var(name):
+    val = os.environ.get(name)
+    if val is not None:
+        return val.strip()
+
+    val = os.environ.get(name.upper()) or os.environ.get(name.lower())
+    if val is not None:
+        return val.strip()
+
+    target_key = name.strip().upper()
+    for k, v in os.environ.items():
+        if k.strip().upper() == target_key:
+            return v.strip()
+
+    return None
+
+def configure_llm_environment():
+    gemini_key = get_env_var("GEMINI_API_KEY") or get_env_var("LLM_API_KEY")
+    openai_key = get_env_var("OPENAI_API_KEY")
+    llm_provider = (get_env_var("LLM_PROVIDER") or "").lower()
+
+    has_openai = openai_key and openai_key.startswith("sk-")
+    has_gemini = gemini_key and gemini_key not in ["", "your_gemini_api_key"]
+
+    if llm_provider == "gemini" or (has_gemini and not has_openai):
+        os.environ["LLM_PROVIDER"] = "gemini"
+        os.environ["LLM_MODEL"] = "gemini/gemini-1.5-flash"
+        os.environ["LLM_API_KEY"] = gemini_key or ""
+        os.environ["GEMINI_API_KEY"] = gemini_key or ""
+        os.environ["EMBEDDING_PROVIDER"] = "fastembed"
+        os.environ["EMBEDDING_MODEL"] = "BAAI/bge-small-en-v1.5"
+        os.environ["EMBEDDING_DIMENSIONS"] = "384"
+
+    return has_openai or has_gemini
+
+def has_valid_llm_key():
+    gemini_key = get_env_var("GEMINI_API_KEY") or get_env_var("LLM_API_KEY")
+    openai_key = get_env_var("OPENAI_API_KEY")
+
+    has_openai = openai_key and openai_key.startswith("sk-")
+    has_gemini = gemini_key and gemini_key not in ["", "your_gemini_api_key"]
+
+    return bool(has_openai or has_gemini)
+
+configure_llm_environment()
 
 import cognee
 from ingestion.ingest import ingest_all, HEALTH_FILE, update_health_stats
@@ -117,11 +167,8 @@ async def ask(payload: AskRequest):
     Returns a unified decision timeline, summary, and related decisions.
     """
     query = payload.query.lower()
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    
-    # 1. Fallback if no OpenAI Key is set
-    if not openai_key or openai_key == "your_actual_api_key_here":
-        if any(x in query for x in ["stripe", "adyen", "deprecate", "payment", "why"]):
+    if not has_valid_llm_key():
+        if any(x in query for x in ["stripe", "adyen", "deprecate", "payment", "gateway"]):
             return MOCK_RESPONSE
         return AskResponse(
             summary="No relevant details found. Try asking 'why did we deprecate Stripe v1?'",
@@ -178,8 +225,7 @@ async def forget():
     """
     Scrub memory database for deprecated systems.
     """
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    if openai_key and openai_key != "your_actual_api_key_here":
+    if has_valid_llm_key():
         try:
             await cognee.forget(everything=True)
         except Exception as e:
